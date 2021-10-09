@@ -1,8 +1,8 @@
 /**************************************************************
-* Class:  CSC-415-0# Fall 2021
-* Name:
-* Student ID:
-* GitHub UserID:
+* Class:  CSC-415-03 Fall 2021
+* Name: Tony Huang
+* Student ID: 915090688
+* GitHub UserID: tzphuang
 * Project: Assignment 2B – Buffered I/O
 *
 * File: b_io.c
