@@ -28,7 +28,28 @@ typedef struct b_fcb
 	fileInfo * fi;;	//holds the low level systems file info
 	// Add any other needed variables here to track the individual open file
 
+	//internal file descriptor used to locate item in fcbArray[MAXFCBS]
+	int my_internal_file_descriptor;
 
+	//LBA count indicates which 512 block we will be refering to in the logical block array
+	int my_LBA_count;
+
+	//LBA position indicates position within the 512 block we want to seek to
+	int my_LBA_position;
+
+	//buffer used to store a chunk of data size equal to B_CHUNK_SIZE
+	//so program doesnt have to constantly do a lba read for data
+	//and grab from buffer instead, as long as it has enough info
+	char * buffer;
+
+	//numBytesAvaliablekeeps count of how many bytes that can be used inside the buffer
+	uint64_t numBytesAvaliable;
+
+	//bufferBookmark represents a bookmark for this specific file control block's buffer
+	//so if we just used 200 bytes, numBytesAvaliable would be numBytesAvaliable - 200 
+	//which is buffer[bufferBookmark] to buffer[bufferBookmark +200 -1] 
+	//used and the next unused byte is buffer[bufferBookmark + 200]
+	uint64_t bufferBookmark;
 
 	} b_fcb;
 	
@@ -72,6 +93,45 @@ b_io_fd b_open (char * filename, int flags)
 	//*** TODO ***:  Write open function to return your file descriptor
 	//				 You may want to allocate the buffer here as well
 	//				 But make sure every file has its own buffer
+
+	//find a free fcb, if none avaliable in "fcbArray" return -1
+	int my_curr_FD = b_getFCB();
+	if(my_curr_FD == -1){
+		return -1;
+	}
+
+	//we now have a uninitialized FCB, time create a FCB and initialize the struct elements
+	//first malloc a new file control block
+	b_fcb *currentFCB = (struct b_fcb*) malloc(sizeof(struct b_fcb));
+
+	//setting fileInfo
+	currentFCB.fi -> GetFileInfo(filename);
+
+	//setting file descriptor
+	currentFCB.my_internal_file_descriptor = my_curr_FD;
+
+	//setting LBA_count/LBA_position to 0 because we havent called LBAread() yet
+	currentFCB.my_LBA_count = 0;
+	currentFCB.my_LBA_position = 0;
+
+	//setting buffer by mallocing a space of size B_CHUNK_SIZE
+	currentFCB.buffer = malloc(B_CHUNK_SIZE);
+
+	//setting numBytesUsed with LBAread
+	currentFCB.numBytesAvaliable = LBAread(currentFCB.buffer, currentFCB.my_LBA_count, currentFCB.my_LBA_position);
+
+	//setting my_LBA_count to how many chunks I read with LBAread
+	currentFCB.my_LBA_count += currentFCB.numBytesAvaliable / B_CHUNK_SIZE;
+
+	//setting my_LBA_position to how far into the last chunk read by LBAread
+	currentFCB.my_LBA_position = currentFCB.numBytesAvaliable % B_CHUNK_SIZE;
+
+	//setting fcbArray to hold newly initialized fcb
+	fcbArray[my_curr_FD] = currentFCB;
+
+	//return to user, not the actual file descriptor of the read file but
+	//the file descriptor used to acess the fcbArray
+	return my_curr_FD;
 	}
 	
 int b_read (b_io_fd fd, char * buffer, int count)
@@ -98,4 +158,14 @@ int b_read (b_io_fd fd, char * buffer, int count)
 void b_close (b_io_fd fd)
 	{
 	//*** TODO ***:  Release any resources
+
+	//for every malloc there is a free
+	//freeing buffer in our file control block, and setting to null
+	free(fcbArray[fd].buffer);
+	fcbArray[fd].buffer == NULL;
+
+	//freeing file control block, and setting to null
+	free(fcbArray[fd]);
+	fcbArray[fd] = NULL;
+
 	}
