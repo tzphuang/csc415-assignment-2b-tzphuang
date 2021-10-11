@@ -120,6 +120,10 @@ b_io_fd b_open (char * filename, int flags)
 	//setting numBytesUsed with LBAread
 	currentFCB.numBytesAvaliable = LBAread(currentFCB.buffer, currentFCB.my_LBA_count, currentFCB.my_LBA_position);
 
+	//setting bufferBookmark to first avaliable element in buffer
+	//which is 0 since this is a new file control block
+	currentFCB.bufferBookmark = 0;
+
 	//setting my_LBA_count to how many chunks I read with LBAread
 	currentFCB.my_LBA_count += currentFCB.numBytesAvaliable / B_CHUNK_SIZE;
 
