@@ -105,33 +105,33 @@ b_io_fd b_open (char * filename, int flags)
 	b_fcb *currentFCB = (struct b_fcb*) malloc(sizeof(struct b_fcb));
 
 	//setting fileInfo
-	currentFCB.fi -> GetFileInfo(filename);
+	currentFCB->fi = GetFileInfo(filename);
 
 	//setting file descriptor
-	currentFCB.my_internal_file_descriptor = my_curr_FD;
+	currentFCB->my_internal_file_descriptor = my_curr_FD;
 
 	//setting LBA_count/LBA_position to 0 because we havent called LBAread() yet
-	currentFCB.my_LBA_count = 0;
-	currentFCB.my_LBA_position = 0;
+	currentFCB->my_LBA_count = 0;
+	currentFCB->my_LBA_position = 0;
 
 	//setting buffer by mallocing a space of size B_CHUNK_SIZE
-	currentFCB.buffer = malloc(B_CHUNK_SIZE);
+	currentFCB->buffer = malloc(B_CHUNK_SIZE);
 
 	//setting numBytesUsed with LBAread
-	currentFCB.numBytesAvaliable = LBAread(currentFCB.buffer, currentFCB.my_LBA_count, currentFCB.my_LBA_position);
+	currentFCB->numBytesAvaliable = LBAread(currentFCB->buffer, currentFCB->my_LBA_count, currentFCB->my_LBA_position);
 
 	//setting bufferBookmark to first avaliable element in buffer
 	//which is 0 since this is a new file control block
-	currentFCB.bufferBookmark = 0;
+	currentFCB->bufferBookmark = 0;
 
 	//setting my_LBA_count to how many chunks I read with LBAread
-	currentFCB.my_LBA_count += currentFCB.numBytesAvaliable / B_CHUNK_SIZE;
+	currentFCB->my_LBA_count += currentFCB->numBytesAvaliable / B_CHUNK_SIZE;
 
 	//setting my_LBA_position to how far into the last chunk read by LBAread
-	currentFCB.my_LBA_position = currentFCB.numBytesAvaliable % B_CHUNK_SIZE;
+	currentFCB->my_LBA_position = currentFCB->numBytesAvaliable % B_CHUNK_SIZE;
 
 	//setting fcbArray to hold newly initialized fcb
-	fcbArray[my_curr_FD] = currentFCB;
+	fcbArray[my_curr_FD] = *currentFCB;
 
 	//return to user, not the actual file descriptor of the read file but
 	//the file descriptor used to acess the fcbArray
@@ -171,7 +171,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//with what we have in our current FCB buffer
 		//and then update our current fcb numBytesAvaliable and bufferBookmark
 		else if (count > 0 &&  count < fcbArray[fd].numBytesAvaliable){
-			memcpy(buffer, fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
+			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
 			fcbArray[fd].numBytesAvaliable -= count;
 			fcbArray[fd].bufferBookmark += count;
 			returnCount += count;
@@ -182,7 +182,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//from new read in buffer, after we must increment lba_count
 		else if (count >= fcbArray[fd].numBytesAvaliable && count < fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE){
 			//dumping what is in fcb buffer into user buffer
-			memcpy(buffer, fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
+			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
 			//updating returnCount / count
 			returnCount += fcbArray[fd].numBytesAvaliable;
 			count -= fcbArray[fd].numBytesAvaliable;
@@ -191,7 +191,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 			fcbArray[fd].my_LBA_count += 1; //updating lbacount as we just called it
 			fcbArray[fd].bufferBookmark = 0; //resetting bufferBookmark 
 			//using returnCount as a pseudo running bookmark for user's buffer we fill what is needed
-			memcpy(buffer[returnCount], fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
+			memcpy(&buffer[returnCount], &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
 			fcbArray[fd].numBytesAvaliable -= count; //updating avaliable bytes after memcpy
 			fcbArray[fd].bufferBookmark += count; //updating bookmark position after memcpy
 		}
@@ -202,7 +202,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//a new 512 buffer and give the user whatever leftover count they need
 		else if (count > fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE){
 			//dumping what is in fcb buffer into user buffer
-			memcpy(buffer, fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
+			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
 			//updating returnCount / count
 			returnCount += fcbArray[fd].numBytesAvaliable;
 			count -= fcbArray[fd].numBytesAvaliable;
@@ -216,14 +216,14 @@ int b_read (b_io_fd fd, char * buffer, int count)
 			//loop and directly fill user's buffer
 			for(int count = 0; count < loopsNeeded; count++){
 				//returnCount is being used as a pseduo bookmark to keep position of user's buffer
-				returnCount += LBAread(buffer[returnCount], fcbArray[fd].my_LBA_count, fcbArray[fd].my_LBA_position);
+				returnCount += LBAread(&buffer[returnCount], fcbArray[fd].my_LBA_count, fcbArray[fd].my_LBA_position);
 				fcbArray[fd].my_LBA_count++; //updating lba_count since a LBAread was just called
 			}
 
 			//fill fcb buffer one last time and fill "count" number of bytes into user buffer
 			fcbArray[fd].numBytesAvaliable = LBAread(fcbArray[fd].buffer, fcbArray[fd].my_LBA_count, fcbArray[fd].my_LBA_position);
 			fcbArray[fd].bufferBookmark = 0; //resetting bufferBookmark to 0 since we just filled the buffer
-			memcpy(buffer[returnCount], fcbArray[fd].buffer[bufferBookmark], remainingCountAfterLooping);
+			memcpy(&buffer[returnCount], &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], remainingCountAfterLooping);
 			//updating bytes valiable/bookmark position/returnCount
 			fcbArray[fd].numBytesAvaliable -= remainingCountAfterLooping;
 			fcbArray[fd].bufferBookmark += remainingCountAfterLooping;
@@ -245,10 +245,10 @@ void b_close (b_io_fd fd)
 	//for every malloc there is a free
 	//freeing buffer in our file control block, and setting to null
 	free(fcbArray[fd].buffer);
-	fcbArray[fd].buffer == NULL;
+	fcbArray[fd].buffer = NULL;
 
 	//freeing file control block, and setting to null
-	free(fcbArray[fd]);
-	fcbArray[fd] = NULL;
+	free(&fcbArray[fd]);
+	fcbArray[fd].fi = NULL;
 
 	}
