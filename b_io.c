@@ -140,23 +140,76 @@ b_io_fd b_open (char * filename, int flags)
 	
 int b_read (b_io_fd fd, char * buffer, int count)
 	{
-	//*** TODO ***:  Write buffered read function to return the data and # bytes read
-	//               You must use the LBAread and you must buffer the data
-	//				 in 512 byte chunks.
-		
-	if (startup == 0) b_init();  //Initialize our system
+		//*** TODO ***:  Write buffered read function to return the data and # bytes read
+		//               You must use the LBAread and you must buffer the data
+		//				 in 512 byte chunks.
+			
+		if (startup == 0) b_init();  //Initialize our system
 
-	// check that fd is between 0 and (MAXFCBS-1)
-	if ((fd < 0) || (fd >= MAXFCBS))
+		// check that fd is between 0 and (MAXFCBS-1)
+		if ((fd < 0) || (fd >= MAXFCBS))
+			{
+			return (-1); 					//invalid file descriptor
+			}
+			
+		if (fcbArray[fd].fi == NULL)		//File not open for this descriptor
+			{
+			return -1;
+			}	
+
+		int returnCount = 0;
+
+		//check if count is not 0 or negative
+		if(count < 0){
+			return -1;						//return -1 for negative count
+		}
+		else if (count == 0)
 		{
-		return (-1); 					//invalid file descriptor
+			return 0;						//return 0 if 0 count
+		}
+		//if we have more buffer bytes than the count provided, fill the passed in buffer
+		//with what we have in our current FCB buffer
+		//and then update our current fcb numBytesAvaliable and bufferBookmark
+		else if (count > 0 &&  count < fcbArray[fd].numBytesAvaliable){
+			memcpy(buffer, fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
+			fcbArray[fd].numBytesAvaliable -= count;
+			fcbArray[fd].bufferBookmark += count;
+			returnCount += count;
+		}
+		//if we have not enough bytes in current fcb buffer to fill user's buffer
+		//and the count does not exceed fcb buffer + B_CHUNK_SIZE (this means only need 1 refill)
+		//we must dump what we have in the buffer, refill the buffer, and then give remaining bytes
+		//from new read in buffer, after we must increment lba_count
+		else if (count >= fcbArray[fd].numBytesAvaliable && count < fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE){
+			//dumping what is in fcb buffer into user buffer
+			memcpy(buffer, fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
+			//updating returnCount / count
+			returnCount += fcbArray[fd].numBytesAvaliable;
+			count -= fcbArray[fd].numBytesAvaliable;
+			//refilling fcb buffer
+			fcbArray[fd].numBytesAvaliable = LBAread(fcbArray[fd].buffer, fcbArray[fd].my_LBA_count, fcbArray[fd].my_LBA_position);
+			fcbArray[fd].my_LBA_count += 1; //updating lbacount as we just called it
+			fcbArray[fd].bufferBookmark = 0; //resetting bufferBookmark 
+			//using returnCount as a pseudo running bookmark for user's buffer we fill what is needed
+			memcpy(buffer[returnCount], fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
+			fcbArray[fd].numBytesAvaliable -= count; //updating avaliable bytes after memcpy
+			fcbArray[fd].bufferBookmark += count; //updating bookmark position after memcpy
+		}
+		//if we need to fill the user's buffer with more than what we have in our current buffer
+		//and the next buffer, we just skip filling our buffer and instead
+		//we dump what we have, loop through and directly fill the user's buffer in 512 chunks
+		//and finally for the last chunk we need to fill, we store in our fcb buffer
+		//a new 512 buffer and give the user whatever leftover count they need
+		else if (count > fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE){
+
+		}
+		//this should never be activated
+		else{
+			printf("ERROR: b_read inside else statement\n");
 		}
 		
-	if (fcbArray[fd].fi == NULL)		//File not open for this descriptor
-		{
-		return -1;
-		}	
 		
+		return returnCount;
 	}
 	
 void b_close (b_io_fd fd)
