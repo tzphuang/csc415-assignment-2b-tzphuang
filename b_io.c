@@ -94,6 +94,7 @@ b_io_fd b_open (char * filename, int flags)
 	//				 You may want to allocate the buffer here as well
 	//				 But make sure every file has its own buffer
 
+	printf("beginning of b_open\n");
 	//find a free fcb, if none avaliable in "fcbArray" return -1
 	int my_curr_FD = b_getFCB();
 	if(my_curr_FD == -1){
@@ -119,6 +120,7 @@ b_io_fd b_open (char * filename, int flags)
 
 	//setting numBytesUsed with LBAread
 	currentFCB->numBytesAvaliable = LBAread(currentFCB->buffer, currentFCB->my_LBA_count, currentFCB->my_LBA_position);
+	printf("number of bytes avaliable is: %ld\n", currentFCB->numBytesAvaliable);
 
 	//setting bufferBookmark to first avaliable element in buffer
 	//which is 0 since this is a new file control block
@@ -135,7 +137,9 @@ b_io_fd b_open (char * filename, int flags)
 
 	//return to user, not the actual file descriptor of the read file but
 	//the file descriptor used to acess the fcbArray
+	printf("ending of b_open\n");
 	return my_curr_FD;
+	
 	}
 	
 int b_read (b_io_fd fd, char * buffer, int count)
@@ -143,7 +147,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//*** TODO ***:  Write buffered read function to return the data and # bytes read
 		//               You must use the LBAread and you must buffer the data
 		//				 in 512 byte chunks.
-			
+		
 		if (startup == 0) b_init();  //Initialize our system
 
 		// check that fd is between 0 and (MAXFCBS-1)
@@ -156,6 +160,8 @@ int b_read (b_io_fd fd, char * buffer, int count)
 			{
 			return -1;
 			}	
+
+		printf("beginning of b_read\n");
 
 		int returnCount = 0;
 
@@ -171,6 +177,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//with what we have in our current FCB buffer
 		//and then update our current fcb numBytesAvaliable and bufferBookmark
 		else if (count > 0 &&  count < fcbArray[fd].numBytesAvaliable){
+			printf("inside else if: fill user buffer from fcb buffer\n");
 			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
 			fcbArray[fd].numBytesAvaliable -= count;
 			fcbArray[fd].bufferBookmark += count;
@@ -181,6 +188,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//we must dump what we have in the buffer, refill the buffer, and then give remaining bytes
 		//from new read in buffer, after we must increment lba_count
 		else if (count >= fcbArray[fd].numBytesAvaliable && count < fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE){
+			printf("inside else if: fill user buffer from fcb buffer and refill buffer once\n");
 			//dumping what is in fcb buffer into user buffer
 			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
 			//updating returnCount / count
@@ -201,6 +209,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//and finally for the last chunk we need to fill, we store in our fcb buffer
 		//a new 512 buffer and give the user whatever leftover count they need
 		else if (count > fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE){
+			printf("inside else if: fill user buffer from fcb buffer and loop directly reading into user buffer\n");
 			//dumping what is in fcb buffer into user buffer
 			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
 			//updating returnCount / count
@@ -234,7 +243,7 @@ int b_read (b_io_fd fd, char * buffer, int count)
 			printf("ERROR: b_read inside else statement\n");
 		}
 		
-		
+		printf("ending of b_read\n");
 		return returnCount;
 	}
 	
@@ -242,13 +251,16 @@ void b_close (b_io_fd fd)
 	{
 	//*** TODO ***:  Release any resources
 
+	printf("beginning of b_close\n");
 	//for every malloc there is a free
 	//freeing buffer in our file control block, and setting to null
 	free(fcbArray[fd].buffer);
 	fcbArray[fd].buffer = NULL;
 
-	//freeing file control block, and setting to null
+	//freeing file control block, and setting fcb file info to null
 	free(&fcbArray[fd]);
 	fcbArray[fd].fi = NULL;
 
+	printf("ending of b_close\n");
+	return;
 	}
