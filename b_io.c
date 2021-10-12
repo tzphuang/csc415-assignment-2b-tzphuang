@@ -201,7 +201,33 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//and finally for the last chunk we need to fill, we store in our fcb buffer
 		//a new 512 buffer and give the user whatever leftover count they need
 		else if (count > fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE){
+			//dumping what is in fcb buffer into user buffer
+			memcpy(buffer, fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
+			//updating returnCount / count
+			returnCount += fcbArray[fd].numBytesAvaliable;
+			count -= fcbArray[fd].numBytesAvaliable;
 
+			//after dumping fcb buffer and updating count to reflect that dump
+			//we can find out how many loops we need to directly fill user's buffer
+			//and the remainder count
+			int loopsNeeded = count / B_CHUNK_SIZE;
+			int remainingCountAfterLooping = count % B_CHUNK_SIZE;
+
+			//loop and directly fill user's buffer
+			for(int count = 0; count < loopsNeeded; count++){
+				//returnCount is being used as a pseduo bookmark to keep position of user's buffer
+				returnCount += LBAread(buffer[returnCount], fcbArray[fd].my_LBA_count, fcbArray[fd].my_LBA_position);
+				fcbArray[fd].my_LBA_count++; //updating lba_count since a LBAread was just called
+			}
+
+			//fill fcb buffer one last time and fill "count" number of bytes into user buffer
+			fcbArray[fd].numBytesAvaliable = LBAread(fcbArray[fd].buffer, fcbArray[fd].my_LBA_count, fcbArray[fd].my_LBA_position);
+			fcbArray[fd].bufferBookmark = 0; //resetting bufferBookmark to 0 since we just filled the buffer
+			memcpy(buffer[returnCount], fcbArray[fd].buffer[bufferBookmark], remainingCountAfterLooping);
+			//updating bytes valiable/bookmark position/returnCount
+			fcbArray[fd].numBytesAvaliable -= remainingCountAfterLooping;
+			fcbArray[fd].bufferBookmark += remainingCountAfterLooping;
+			returnCount += remainingCountAfterLooping;
 		}
 		//this should never be activated
 		else{
