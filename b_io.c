@@ -103,8 +103,8 @@ b_io_fd b_open (char * filename, int flags)
 
 	//we now have a uninitialized FCB, time create a FCB and initialize the struct elements
 	//first malloc a new file control block
-	b_fcb *currentFCB = (struct b_fcb*) malloc(sizeof(struct b_fcb));
-
+	//b_fcb *currentFCB = (struct b_fcb*) malloc(sizeof(struct b_fcb));
+	b_fcb* currentFCB = &fcbArray[my_curr_FD];
 	//setting fileInfo
 	currentFCB->fi = GetFileInfo(filename);
 
@@ -119,6 +119,9 @@ b_io_fd b_open (char * filename, int flags)
 	currentFCB->buffer = malloc(B_CHUNK_SIZE);
 
 	//setting numBytesUsed with LBAread
+	//my_lba_count is a count of how many blocks I want to read
+	//my_lba_position is which block I want to read
+	//use file information (fi) to find the beginning position of lba position
 	currentFCB->numBytesAvaliable = LBAread(currentFCB->buffer, currentFCB->my_LBA_count, currentFCB->my_LBA_position);
 	printf("number of bytes avaliable is: %ld\n", currentFCB->numBytesAvaliable);
 
