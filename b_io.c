@@ -181,15 +181,18 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//we must dump what we have in the buffer, refill the buffer, and then give remaining bytes
 		//from new read in buffer, after we must increment lba_count
 		else if (count >= fcbArray[fd].numBytesAvaliable && count < (fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE)){
-			printf("\ninside else if: fill user buffer from fcb buffer and refill buffer once\n\n");
+			printf("\n\ninside else if: fill user buffer from fcb buffer and refill buffer once\n\n");
 			//dumping what is in fcb buffer into user buffer
 			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
 
 			//updating returnCount / count
-			printf("\nreturn count: %d\n", returnCount);
+			printf("return count: %d\n", returnCount);
 			returnCount = returnCount + fcbArray[fd].numBytesAvaliable;
 			printf("return count: %d\n", returnCount);
+
+			printf("count needed to be filled: %d\n", count);
 			count = count - fcbArray[fd].numBytesAvaliable;
+			printf("count needed to be filled: %d\n", count);
 
 			//refilling fcb buffer
 			fcbArray[fd].numBytesAvaliable = LBAread(fcbArray[fd].buffer, fcbArray[fd].runningChunkCount, fcbArray[fd].fi->location);
