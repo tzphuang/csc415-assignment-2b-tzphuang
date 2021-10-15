@@ -49,6 +49,9 @@ typedef struct b_fcb
 	//used and the next unused byte is buffer[bufferBookmark + 200]
 	uint64_t bufferBookmark;
 
+	//used to keep track of how far we are into our file
+	int totalBytesTransversed;
+
 	} b_fcb;
 	
 b_fcb fcbArray[MAXFCBS];
@@ -110,7 +113,7 @@ b_io_fd b_open (char * filename, int flags)
 	//setting buffer by mallocing a space of size B_CHUNK_SIZE
 	fcbArray[my_curr_FD].buffer = malloc(B_CHUNK_SIZE);
 
-	//intializing to the LBA chunk index 0 (aka the beginning of the file)
+	//intializing to the LBA chunk index 1 (aka the beginning of the file)
 	fcbArray[my_curr_FD].runningChunkCount = 1;
 
 	//setting numBytesUsed with LBAread
@@ -126,6 +129,9 @@ b_io_fd b_open (char * filename, int flags)
 	//setting bufferBookmark to first avaliable element in buffer
 	//which is 0 since this is a new file control block
 	fcbArray[my_curr_FD].bufferBookmark = 0;
+
+	//setting total bytes transversed to 0 as we havent done any buffered reading yet
+	fcbArray[my_curr_FD].totalBytesTransversed = 0;
 
 	//return to user, not the actual file descriptor of the read file but
 	//the file descriptor used to acess the fcbArray
@@ -162,9 +168,9 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		if(count < 0){
 			return -1;						//return -1 for negative count
 		}
-		else if (count == 0)
+		else if (count == 0 || (fcbArray[fd].totalBytesTransversed >= fcbArray[fd].fi->fileSize))
 		{
-			return 0;						//return 0 if 0 count
+			return 0;						//return 0 if 0 count or if we reach EOF
 		}
 		//if we have more buffer bytes than the count provided, fill the passed in buffer
 		//with what we have in our current FCB buffer
@@ -175,6 +181,8 @@ int b_read (b_io_fd fd, char * buffer, int count)
 			fcbArray[fd].numBytesAvaliable -= count;
 			fcbArray[fd].bufferBookmark += count;
 			returnCount += count;
+			//updating bytes in file transversered
+			fcbArray[fd].totalBytesTransversed += returnCount;
 		}
 		//if we have not enough bytes in current fcb buffer to fill user's buffer
 		//and the count does not exceed fcb buffer + B_CHUNK_SIZE (this means only need 1 refill)
@@ -200,12 +208,19 @@ int b_read (b_io_fd fd, char * buffer, int count)
 			fcbArray[fd].runningChunkCount += 1;
 			fcbArray[fd].bufferBookmark = 0; //resetting bufferBookmark to beginning of array
 
-			//using returnCount as a pseudo running bookmark for user's buffer we fill what is needed
-			//this is not activating? but why
-			memcpy( &buffer[returnCount] , &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
-
-			fcbArray[fd].numBytesAvaliable -= count; //updating avaliable bytes after memcpy
-			fcbArray[fd].bufferBookmark += count; //updating bookmark position after memcpy
+			//only memcpy when we have a count greater than 0 so we can fill the rest of
+			//user's buffer
+			if(count > 0){
+				//using returnCount as a pseudo running bookmark for user's buffer we fill what is needed
+				//this is not activating? but why
+				memcpy( &buffer[returnCount] , &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], count);
+				fcbArray[fd].numBytesAvaliable -= count; //updating avaliable bytes after memcpy
+				fcbArray[fd].bufferBookmark += count; //updating bookmark position after memcpy
+				returnCount += count;
+			}
+			
+			//updating bytes in file transversered
+			fcbArray[fd].totalBytesTransversed += returnCount;
 		}
 		//if we need to fill the user's buffer with more than what we have in our current buffer
 		//and the next buffer, we just skip filling our buffer and instead
@@ -247,6 +262,8 @@ int b_read (b_io_fd fd, char * buffer, int count)
 			fcbArray[fd].numBytesAvaliable -= remainingCountNeeded;
 			fcbArray[fd].bufferBookmark += remainingCountNeeded;
 			returnCount += remainingCountNeeded;
+			//updating bytes in file transversered
+			fcbArray[fd].totalBytesTransversed += returnCount;
 		}
 		//this should never be activated
 		else{
