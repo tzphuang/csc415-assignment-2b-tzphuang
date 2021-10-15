@@ -122,8 +122,7 @@ b_io_fd b_open (char * filename, int flags)
 	//my_lba_count is a count of how many blocks I want to read
 	//my_lba_position is which block I want to read
 	//use file information (fi) to find the beginning position of lba position
-	LBAread(fcbArray[my_curr_FD].buffer, 1, fcbArray[my_curr_FD].fi->location);
-	fcbArray[my_curr_FD].numBytesAvaliable = B_CHUNK_SIZE;
+	fcbArray[my_curr_FD].numBytesAvaliable = LBAread(fcbArray[my_curr_FD].buffer, 1, fcbArray[my_curr_FD].fi->location);
 	//printf("number of bytes avaliable is: %ld\n", currentFCB->numBytesAvaliable);
 
 	//updating running chunkCount by 1 since we just did a LBAread
