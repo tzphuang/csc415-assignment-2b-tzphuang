@@ -37,9 +37,6 @@ typedef struct b_fcb
 	//and grab from buffer instead, as long as it has enough info
 	char * buffer;
 
-	//Keeps track of which 512 chunk we are on
-	int runningChunkCount;
-
 	//numBytesAvaliablekeeps count of how many bytes that can be used inside the buffer
 	uint64_t numBytesAvaliable;
 
@@ -113,18 +110,16 @@ b_io_fd b_open (char * filename, int flags)
 	//setting buffer by mallocing a space of size B_CHUNK_SIZE
 	fcbArray[my_curr_FD].buffer = malloc(B_CHUNK_SIZE);
 
-	//intializing to the LBA chunk index 1 (aka the beginning of the file)
-	fcbArray[my_curr_FD].runningChunkCount = 1;
-
 	//setting numBytesUsed with LBAread
 	//my_lba_count is a count of how many blocks I want to read
 	//my_lba_position is which block I want to read
 	//use file information (fi) to find the beginning position of lba position
-	fcbArray[my_curr_FD].numBytesAvaliable = LBAread(fcbArray[my_curr_FD].buffer, fcbArray[my_curr_FD].runningChunkCount, fcbArray[my_curr_FD].fi->location);
+	LBAread(fcbArray[my_curr_FD].buffer, 1, fcbArray[my_curr_FD].fi->location);
+	fcbArray[my_curr_FD].numBytesAvaliable = B_CHUNK_SIZE;
 	//printf("number of bytes avaliable is: %ld\n", currentFCB->numBytesAvaliable);
 
 	//updating running chunkCount by 1 since we just did a LBAread
-	fcbArray[my_curr_FD].runningChunkCount += 1;
+	fcbArray[my_curr_FD].fi->location += 1;
 
 	//setting bufferBookmark to first avaliable element in buffer
 	//which is 0 since this is a new file control block
@@ -189,23 +184,20 @@ int b_read (b_io_fd fd, char * buffer, int count)
 		//we must dump what we have in the buffer, refill the buffer, and then give remaining bytes
 		//from new read in buffer, after we must increment lba_count
 		else if (count >= fcbArray[fd].numBytesAvaliable && count < (fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE)){
-			printf("\n\ninside else if: fill user buffer from fcb buffer and refill buffer once\n\n");
+			//printf("\n\ninside else if: fill user buffer from fcb buffer and refill buffer once\n\n");
 			//dumping what is in fcb buffer into user buffer
 			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
 
 			//updating returnCount / count
-			printf("return count: %d\n", returnCount);
 			returnCount = returnCount + fcbArray[fd].numBytesAvaliable;
-			printf("return count: %d\n", returnCount);
 
-			printf("count needed to be filled: %d\n", count);
 			count = count - fcbArray[fd].numBytesAvaliable;
-			printf("count needed to be filled: %d\n", count);
 
 			//refilling fcb buffer
-			fcbArray[fd].numBytesAvaliable = LBAread(fcbArray[fd].buffer, fcbArray[fd].runningChunkCount, fcbArray[fd].fi->location);
+			fcbArray[fd].numBytesAvaliable = LBAread(fcbArray[fd].buffer, 1, fcbArray[fd].fi->location);
+
 			//since LBAread was just called, we need to update our chunk "index"
-			fcbArray[fd].runningChunkCount += 1;
+			fcbArray[fd].fi->location += 1;
 			fcbArray[fd].bufferBookmark = 0; //resetting bufferBookmark to beginning of array
 
 			//only memcpy when we have a count greater than 0 so we can fill the rest of
@@ -219,49 +211,6 @@ int b_read (b_io_fd fd, char * buffer, int count)
 				returnCount += count;
 			}
 			
-			//updating bytes in file transversered
-			fcbArray[fd].totalBytesTransversed += returnCount;
-		}
-		//if we need to fill the user's buffer with more than what we have in our current buffer
-		//and the next buffer, we just skip filling our buffer and instead
-		//we dump what we have, directly fill the user's buffer in 512 chunks x how many chunks needed
-		//and finally for the last chunk we need to fill, we store in our fcb buffer
-		//a new 512 buffer and give the user whatever leftover count they need
-		else if (count > (fcbArray[fd].numBytesAvaliable + B_CHUNK_SIZE)){
-			printf("inside else if: fill user buffer from fcb buffer and loop directly reading into user buffer\n");
-			//dumping what is in fcb buffer into user buffer
-			memcpy(buffer, &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], fcbArray[fd].numBytesAvaliable);
-			//updating returnCount / count /chunk counter
-			returnCount += fcbArray[fd].numBytesAvaliable;
-			count -= fcbArray[fd].numBytesAvaliable;
-			fcbArray[fd].runningChunkCount += 1;
-
-			//after dumping fcb buffer and updating count to reflect that dump
-			//we can find out how many chunks we need to directly fill user's buffer
-			//and the remainding count needed
-			int chunksNeeded = count / B_CHUNK_SIZE;
-			int remainingCountNeeded = count % B_CHUNK_SIZE;
-
-			//fill user buffer directly
-			for(int count = 0; count < chunksNeeded; count++){
-				fcbArray[fd].numBytesAvaliable = LBAread(&buffer[returnCount], fcbArray[fd].runningChunkCount, fcbArray[fd].fi->location);
-				//update returnCount /chunk counter
-				returnCount += fcbArray[fd].numBytesAvaliable;
-				fcbArray[fd].runningChunkCount += 1;
-			}
-			
-			//fill fcb buffer one last time and fill "count" number of bytes into user buffer
-			fcbArray[fd].numBytesAvaliable = LBAread(fcbArray[fd].buffer, fcbArray[fd].runningChunkCount, fcbArray[fd].fi->location);
-			//update chunk counter
-			fcbArray[fd].runningChunkCount += 1;
-
-			fcbArray[fd].bufferBookmark = 0; //resetting bufferBookmark to 0 since we just filled the buffer
-			memcpy(&buffer[returnCount], &fcbArray[fd].buffer[ fcbArray[fd].bufferBookmark ], remainingCountNeeded);
-
-			//updating bytes avaliable/bookmark position/returnCount
-			fcbArray[fd].numBytesAvaliable -= remainingCountNeeded;
-			fcbArray[fd].bufferBookmark += remainingCountNeeded;
-			returnCount += remainingCountNeeded;
 			//updating bytes in file transversered
 			fcbArray[fd].totalBytesTransversed += returnCount;
 		}
