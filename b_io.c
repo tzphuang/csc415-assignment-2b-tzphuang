@@ -7,7 +7,15 @@
 *
 * File: b_io.c
 *
-* Description:
+* Description: program has an array of file control blocks for individual files
+* 	to be stored and referenced and can have up to 20 individual files opened at once.
+*	Program has b_open which will find a free fcb within the fcbArray and fill that with
+*	the passed in parameters. b_read will dump "count" number of bytes if we have enough
+*	avaliable from 512 chunk buffer, if we dont have enough bytes to fill user's buffer
+*	we dump what we have first, refill our buffer, and then fill the user's buffer with
+*	how many the user's buffer is still needed. b_close frees a buffer from a relevant
+*	file descriptor and sets its file information to null so the fcbArray knows it 
+*	can use it again
 *
 **************************************************************/
 #include <stdio.h>
